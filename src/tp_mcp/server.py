@@ -17,6 +17,7 @@ from tp_mcp.auth import get_credential, validate_auth
 from tp_mcp.tools import (
     tp_analyze_workout,
     tp_auth_status,
+    tp_create_workout,
     tp_get_fitness,
     tp_get_peaks,
     tp_get_profile,
@@ -175,6 +176,37 @@ TOOLS = [
         },
     ),
     Tool(
+        name="tp_create_workout",
+        description="Create a planned workout. Specify date, sport, title, and duration.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string",
+                    "description": "YYYY-MM-DD. The date for the workout.",
+                },
+                "sport": {
+                    "type": "string",
+                    "enum": ["Bike", "Run", "Swim", "Strength", "DayOff", "Other"],
+                    "description": "Sport type.",
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Workout title.",
+                },
+                "duration_minutes": {
+                    "type": "integer",
+                    "description": "Planned duration in minutes.",
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Optional workout description.",
+                },
+            },
+            "required": ["date", "sport", "title", "duration_minutes"],
+        },
+    ),
+    Tool(
         name="tp_refresh_auth",
         description="Refresh auth by extracting cookie from user's browser. Use when other tools return auth errors.",
         inputSchema={
@@ -242,6 +274,15 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 days=arguments.get("days", 90),
                 start_date=arguments.get("start_date"),
                 end_date=arguments.get("end_date"),
+            )
+
+        elif name == "tp_create_workout":
+            result = await tp_create_workout(
+                date_str=arguments["date"],
+                sport=arguments["sport"],
+                title=arguments["title"],
+                duration_minutes=arguments["duration_minutes"],
+                description=arguments.get("description"),
             )
 
         elif name == "tp_analyze_workout":
