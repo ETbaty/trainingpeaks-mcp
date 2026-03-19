@@ -1,7 +1,7 @@
 """Pydantic input validation models for tool arguments."""
 
-from datetime import date
-from typing import Literal
+from datetime import date as date_type
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
@@ -31,14 +31,14 @@ class WorkoutIdInput(BaseModel):
 class DateRangeInput(BaseModel):
     """Validates start/end date range for workout queries."""
 
-    start_date: date
-    end_date: date
+    start_date: date_type
+    end_date: date_type
 
     @field_validator("start_date", "end_date", mode="before")
     @classmethod
     def coerce_string(cls, v: object) -> object:
         if isinstance(v, str):
-            return date.fromisoformat(v)
+            return date_type.fromisoformat(v)
         return v
 
     @model_validator(mode="after")
@@ -53,19 +53,24 @@ class DateRangeInput(BaseModel):
 class CreateWorkoutInput(BaseModel):
     """Validates input for workout creation."""
 
-    date: date
+    date: date_type
     sport: str
     title: str = Field(min_length=1, max_length=200)
-    duration_minutes: int = Field(ge=1, le=1440)
+    duration_minutes: int | None = Field(default=None, ge=1, le=1440)
     description: str | None = Field(default=None, max_length=2000)
     distance_km: float | None = Field(default=None, gt=0, le=1000)
     tss_planned: float | None = Field(default=None, gt=0, le=2000)
+    structure: Any = None
+    subtype_id: int | None = Field(default=None, gt=0)
+    tags: str | None = Field(default=None, max_length=500)
+    feeling: int | None = Field(default=None, ge=0, le=10)
+    rpe: int | None = Field(default=None, ge=1, le=10)
 
     @field_validator("date", mode="before")
     @classmethod
     def coerce_date_string(cls, v: object) -> object:
         if isinstance(v, str):
-            return date.fromisoformat(v)
+            return date_type.fromisoformat(v)
         return v
 
     @field_validator("sport")
@@ -78,13 +83,80 @@ class CreateWorkoutInput(BaseModel):
             raise ValueError(f"Invalid sport '{v}'. Valid: {valid}")
         return v
 
+    @model_validator(mode="after")
+    def check_duration_or_structure(self) -> "CreateWorkoutInput":
+        if self.duration_minutes is None and self.structure is None:
+            raise ValueError("Either duration_minutes or structure must be provided")
+        return self
+
+
+class UpdateWorkoutInput(BaseModel):
+    """Validates input for workout updates."""
+
+    workout_id: int = Field(gt=0)
+    sport: str | None = None
+    subtype_id: int | None = Field(default=None, gt=0)
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = None
+    date: date_type | None = None
+    duration_minutes: float | None = Field(default=None, ge=0, le=1440)
+    distance_km: float | None = Field(default=None, ge=0, le=1000)
+    tss_planned: float | None = Field(default=None, ge=0, le=2000)
+    tags: str | None = Field(default=None, max_length=500)
+    athlete_comment: str | None = None
+    coach_comment: str | None = None
+    feeling: int | None = Field(default=None, ge=0, le=10)
+    rpe: int | None = Field(default=None, ge=1, le=10)
+    structure: Any = None
+
+    @field_validator("workout_id", mode="before")
+    @classmethod
+    def coerce_id_string(cls, v: object) -> object:
+        if isinstance(v, str):
+            return int(v)
+        return v
+
+    @field_validator("date", mode="before")
+    @classmethod
+    def coerce_date_string(cls, v: object) -> object:
+        if v is None:
+            return v
+        if isinstance(v, str):
+            return date_type.fromisoformat(v)
+        return v
+
+    @field_validator("sport")
+    @classmethod
+    def check_sport(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        from tp_mcp.tools.workouts import SPORT_TYPE_MAP
+
+        if v not in SPORT_TYPE_MAP:
+            valid = ", ".join(SPORT_TYPE_MAP.keys())
+            raise ValueError(f"Invalid sport '{v}'. Valid: {valid}")
+        return v
+
+
+class SingleDateInput(BaseModel):
+    """Validates a single date input."""
+
+    date: date_type
+
+    @field_validator("date", mode="before")
+    @classmethod
+    def coerce_string(cls, v: object) -> object:
+        if isinstance(v, str):
+            return date_type.fromisoformat(v)
+        return v
+
 
 class FitnessInput(BaseModel):
     """Validates input for fitness queries."""
 
     days: int = Field(default=90, ge=1, le=365)
-    start_date: date | None = None
-    end_date: date | None = None
+    start_date: date_type | None = None
+    end_date: date_type | None = None
 
     @field_validator("start_date", "end_date", mode="before")
     @classmethod
@@ -92,7 +164,7 @@ class FitnessInput(BaseModel):
         if v is None:
             return v
         if isinstance(v, str):
-            return date.fromisoformat(v)
+            return date_type.fromisoformat(v)
         return v
 
     @model_validator(mode="after")

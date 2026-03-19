@@ -32,7 +32,8 @@ class TestListTools:
     async def test_list_tools_returns_all_tools(self):
         tools = await list_tools()
         names = {t.name for t in tools}
-        expected = {
+        # Core tools that must always exist
+        core_tools = {
             "tp_auth_status",
             "tp_get_profile",
             "tp_get_workouts",
@@ -44,7 +45,54 @@ class TestListTools:
             "tp_create_workout",
             "tp_refresh_auth",
         }
-        assert expected == names
+        assert core_tools.issubset(names)
+        # v2.0 tools
+        v2_tools = {
+            "tp_update_workout",
+            "tp_delete_workout",
+            "tp_copy_workout",
+            "tp_reorder_workouts",
+            "tp_get_workout_comments",
+            "tp_add_workout_comment",
+            "tp_validate_structure",
+            "tp_get_workout_types",
+            "tp_get_atp",
+            "tp_get_weekly_summary",
+            "tp_get_athlete_settings",
+            "tp_update_ftp",
+            "tp_update_hr_zones",
+            "tp_update_speed_zones",
+            "tp_update_nutrition",
+            "tp_get_pool_length_settings",
+            "tp_log_metrics",
+            "tp_get_metrics",
+            "tp_get_nutrition",
+            "tp_get_equipment",
+            "tp_create_equipment",
+            "tp_update_equipment",
+            "tp_delete_equipment",
+            "tp_get_focus_event",
+            "tp_get_next_event",
+            "tp_get_events",
+            "tp_create_event",
+            "tp_update_event",
+            "tp_delete_event",
+            "tp_create_note",
+            "tp_delete_note",
+            "tp_get_availability",
+            "tp_create_availability",
+            "tp_delete_availability",
+            "tp_get_libraries",
+            "tp_get_library_items",
+            "tp_get_library_item",
+            "tp_create_library",
+            "tp_delete_library",
+            "tp_create_library_item",
+            "tp_update_library_item",
+            "tp_schedule_library_workout",
+        }
+        assert v2_tools.issubset(names)
+        assert len(names) == len(core_tools) + len(v2_tools)
 
     @pytest.mark.asyncio
     async def test_create_workout_schema_includes_new_fields(self):
