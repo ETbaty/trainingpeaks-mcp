@@ -442,7 +442,7 @@ TOOLS = [
     ),
     Tool(
         name="tp_update_ftp",
-        description="Update FTP and recalculate Coggan 5-zone power model.",
+        description="Update FTP and recalculate the default power zones.",
         inputSchema={
             "type": "object",
             "properties": {"ftp": {"type": "integer", "description": "FTP in watts"}},

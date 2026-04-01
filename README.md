@@ -52,7 +52,7 @@ Ask your AI assistant things like:
 | Tool | Description |
 |------|-------------|
 | `tp_get_athlete_settings` | Get FTP, thresholds, zones, profile |
-| `tp_update_ftp` | Update FTP and recalculate Coggan 5-zone model |
+| `tp_update_ftp` | Update FTP and recalculate the default power zones |
 | `tp_update_hr_zones` | Update heart rate zones |
 | `tp_update_speed_zones` | Update run/swim pace zones |
 | `tp_update_nutrition` | Update daily planned calories |
