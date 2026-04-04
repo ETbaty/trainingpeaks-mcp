@@ -532,6 +532,25 @@ class TestTpUnpairWorkout:
         assert result["isError"] is True
         assert result["error_code"] == "API_ERROR"
 
+    @pytest.mark.asyncio
+    async def test_unpair_unexpected_response(self):
+        """Test unpair when API returns a non-dict response."""
+        unexpected_response = APIResponse(
+            success=True,
+            data=[{"unexpected": "format"}],
+        )
+
+        with patch("tp_mcp.tools.workouts.TPClient") as mock_client:
+            mock_instance = AsyncMock()
+            mock_instance.ensure_athlete_id = AsyncMock(return_value=123)
+            mock_instance.post = AsyncMock(return_value=unexpected_response)
+            mock_client.return_value.__aenter__.return_value = mock_instance
+
+            result = await tp_unpair_workout(workout_id="111")
+
+        assert result["isError"] is True
+        assert result["error_code"] == "API_ERROR"
+
 
 class TestTpPairWorkout:
     """Tests for tp_pair_workout tool."""
@@ -624,3 +643,24 @@ class TestTpPairWorkout:
 
         assert result["isError"] is True
         assert result["error_code"] == "NOT_FOUND"
+
+    @pytest.mark.asyncio
+    async def test_pair_unexpected_response(self):
+        """Test pair when API returns a non-dict response."""
+        unexpected_response = APIResponse(
+            success=True,
+            data=[{"unexpected": "format"}],
+        )
+
+        with patch("tp_mcp.tools.workouts.TPClient") as mock_client:
+            mock_instance = AsyncMock()
+            mock_instance.ensure_athlete_id = AsyncMock(return_value=123)
+            mock_instance.post = AsyncMock(return_value=unexpected_response)
+            mock_client.return_value.__aenter__.return_value = mock_instance
+
+            result = await tp_pair_workout(
+                completed_workout_id="111", planned_workout_id="222"
+            )
+
+        assert result["isError"] is True
+        assert result["error_code"] == "API_ERROR"
