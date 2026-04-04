@@ -2,6 +2,8 @@
 
 import json
 import logging
+from datetime import date as date_type
+from datetime import datetime as datetime_type
 from typing import Any, Literal
 
 from pydantic import ValidationError
@@ -59,6 +61,26 @@ SPORT_TYPE_MAP: dict[str, tuple[int, int]] = {
     "Walk": (13, 13),
     "Other": (100, 100),
 }
+
+
+def _format_workout_day(value: date_type | datetime_type) -> str:
+    """Format a workout day value for the TrainingPeaks API."""
+    day = value.date() if isinstance(value, datetime_type) else value
+    return f"{day.isoformat()}T00:00:00"
+
+
+def _format_start_time_planned(value: datetime_type) -> str:
+    """Format a planned start time for the TrainingPeaks API."""
+    return value.isoformat(timespec="seconds")
+
+
+def _shift_start_time_planned(existing_start_time: str, target_day: date_type) -> str | None:
+    """Move an existing planned start time to a new day, preserving its time-of-day."""
+    try:
+        start_dt = datetime_type.fromisoformat(existing_start_time)
+    except ValueError:
+        return None
+    return datetime_type.combine(target_day, start_dt.timetz()).isoformat(timespec="seconds")
 
 
 async def tp_get_workouts(
@@ -280,7 +302,7 @@ async def tp_create_workout(
     """Create a planned workout.
 
     Args:
-        date_str: Workout date in ISO format (YYYY-MM-DD).
+        date_str: Workout date in ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS).
         sport: Sport type (see SPORT_TYPE_MAP for valid values).
         title: Workout title.
         duration_minutes: Planned duration in minutes (optional if structure provided).
@@ -367,11 +389,13 @@ async def tp_create_workout(
 
         payload: dict[str, Any] = {
             "athleteId": athlete_id,
-            "workoutDay": f"{params.date.isoformat()}T00:00:00",
+            "workoutDay": _format_workout_day(params.date),
             "workoutTypeFamilyId": family_id,
             "workoutTypeValueId": type_id,
             "title": params.title,
         }
+        if isinstance(params.date, datetime_type):
+            payload["startTimePlanned"] = _format_start_time_planned(params.date)
         if params.subtype_id is not None:
             payload["workoutSubTypeId"] = params.subtype_id
 
@@ -417,7 +441,7 @@ async def tp_create_workout(
             "success": True,
             "workout_id": response.data.get("workoutId"),
             "title": response.data.get("title", title),
-            "date": response.data.get("workoutDay", date_str),
+            "date": response.data.get("startTimePlanned") or response.data.get("workoutDay", date_str),
             "sport": sport,
         }
 
@@ -513,7 +537,13 @@ async def tp_update_workout(
         if params.description is not None:
             existing["description"] = params.description
         if params.date is not None:
-            existing["workoutDay"] = f"{params.date.isoformat()}T00:00:00"
+            existing["workoutDay"] = _format_workout_day(params.date)
+            if isinstance(params.date, datetime_type):
+                existing["startTimePlanned"] = _format_start_time_planned(params.date)
+            elif existing.get("startTimePlanned"):
+                shifted_start = _shift_start_time_planned(existing["startTimePlanned"], params.date)
+                if shifted_start is not None:
+                    existing["startTimePlanned"] = shifted_start
         if params.duration_minutes is not None:
             existing["totalTimePlanned"] = params.duration_minutes / 60.0
         if params.distance_km is not None:

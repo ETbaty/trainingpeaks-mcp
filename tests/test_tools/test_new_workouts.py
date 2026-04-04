@@ -221,6 +221,76 @@ class TestUpdateWorkout:
         assert put_payload["workoutTypeValueId"] == 2
 
     @pytest.mark.asyncio
+    async def test_update_date_only_sets_midnight(self):
+        """Date-only updates should keep the existing midnight behavior."""
+        existing = {"workoutId": 1001, "workoutDay": "2026-03-01T00:00:00"}
+        get_response = APIResponse(success=True, data=existing)
+        put_response = APIResponse(success=True, data=None)
+
+        with patch("tp_mcp.tools.workouts.TPClient") as mock_client:
+            mock_instance = AsyncMock()
+            mock_instance.ensure_athlete_id = AsyncMock(return_value=123)
+            mock_instance.get = AsyncMock(return_value=get_response)
+            mock_instance.put = AsyncMock(return_value=put_response)
+            mock_client.return_value.__aenter__.return_value = mock_instance
+
+            result = await tp_update_workout(workout_id="1001", date="2026-04-14")
+
+        assert result["success"] is True
+        put_payload = mock_instance.put.call_args[1]["json"]
+        assert put_payload["workoutDay"] == "2026-04-14T00:00:00"
+
+    @pytest.mark.asyncio
+    async def test_update_date_only_preserves_existing_planned_start_time(self):
+        """Date-only updates should move an existing planned start to the new day."""
+        existing = {
+            "workoutId": 1001,
+            "workoutDay": "2026-03-01T00:00:00",
+            "startTimePlanned": "2026-03-01T16:45:00",
+        }
+        get_response = APIResponse(success=True, data=existing)
+        put_response = APIResponse(success=True, data=None)
+
+        with patch("tp_mcp.tools.workouts.TPClient") as mock_client:
+            mock_instance = AsyncMock()
+            mock_instance.ensure_athlete_id = AsyncMock(return_value=123)
+            mock_instance.get = AsyncMock(return_value=get_response)
+            mock_instance.put = AsyncMock(return_value=put_response)
+            mock_client.return_value.__aenter__.return_value = mock_instance
+
+            result = await tp_update_workout(workout_id="1001", date="2026-04-14")
+
+        assert result["success"] is True
+        put_payload = mock_instance.put.call_args[1]["json"]
+        assert put_payload["workoutDay"] == "2026-04-14T00:00:00"
+        assert put_payload["startTimePlanned"] == "2026-04-14T16:45:00"
+
+    @pytest.mark.asyncio
+    async def test_update_datetime_preserves_time(self):
+        """Datetime updates should forward the scheduled time to TrainingPeaks."""
+        existing = {
+            "workoutId": 1001,
+            "workoutDay": "2026-03-01T00:00:00",
+            "startTimePlanned": "2026-03-01T09:30:00",
+        }
+        get_response = APIResponse(success=True, data=existing)
+        put_response = APIResponse(success=True, data=None)
+
+        with patch("tp_mcp.tools.workouts.TPClient") as mock_client:
+            mock_instance = AsyncMock()
+            mock_instance.ensure_athlete_id = AsyncMock(return_value=123)
+            mock_instance.get = AsyncMock(return_value=get_response)
+            mock_instance.put = AsyncMock(return_value=put_response)
+            mock_client.return_value.__aenter__.return_value = mock_instance
+
+            result = await tp_update_workout(workout_id="1001", date="2026-04-14T16:45:00")
+
+        assert result["success"] is True
+        put_payload = mock_instance.put.call_args[1]["json"]
+        assert put_payload["workoutDay"] == "2026-04-14T00:00:00"
+        assert put_payload["startTimePlanned"] == "2026-04-14T16:45:00"
+
+    @pytest.mark.asyncio
     async def test_update_with_structure_serialises(self):
         """Structure dict should be JSON-serialised for PUT."""
         existing = {"workoutId": 1001}

@@ -185,7 +185,7 @@ TOOLS = [
         inputSchema={
             "type": "object",
             "properties": {
-                "date": {"type": "string", "description": "YYYY-MM-DD"},
+                "date": {"type": "string", "description": "YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS"},
                 "sport": {"type": "string", "enum": list(SPORT_TYPE_MAP.keys())},
                 "title": {"type": "string", "description": "Workout title"},
                 "duration_minutes": {
@@ -221,7 +221,7 @@ TOOLS = [
                 "subtype_id": {"type": "integer"},
                 "title": {"type": "string"},
                 "description": {"type": "string"},
-                "date": {"type": "string", "description": "YYYY-MM-DD"},
+                "date": {"type": "string", "description": "YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS"},
                 "duration_minutes": {"type": "number"},
                 "distance_km": {"type": "number"},
                 "tss_planned": {"type": "number"},

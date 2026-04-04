@@ -14,6 +14,7 @@ Connect TrainingPeaks to Claude and other AI assistants via the Model Context Pr
 
 Ask your AI assistant things like:
 - "Build me a 4x8min threshold session for Tuesday with warm-up and cool-down"
+- "Schedule my mobility session for April 14, 2026 at 16:45"
 - "Compare my FTP progression this year vs last year"
 - "Copy last week's long ride to this Saturday"
 - "Log my weight at 74.5kg and sleep at 7.5 hours"
@@ -29,8 +30,8 @@ Ask your AI assistant things like:
 |------|-------------|
 | `tp_get_workouts` | List workouts in a date range (max 90 days) |
 | `tp_get_workout` | Get full details for a single workout |
-| `tp_create_workout` | Create a workout with optional interval structure, auto-computed IF/TSS |
-| `tp_update_workout` | Update any field of an existing workout |
+| `tp_create_workout` | Create a workout with optional interval structure, auto-computed IF/TSS, and optional planned start time |
+| `tp_update_workout` | Update any field of an existing workout, including planned start time |
 | `tp_delete_workout` | Delete a workout |
 | `tp_copy_workout` | Copy a workout to a new date (preserves structure and planned fields) |
 | `tp_reorder_workouts` | Reorder workouts on a given day |
@@ -213,6 +214,29 @@ Create workouts with full interval structure. The server auto-computes duration,
 ```
 
 The LLM builds this JSON naturally from conversation - just say "build me 4x8min sweet spot with 2min rest".
+
+For planned workout scheduling, `tp_create_workout` and `tp_update_workout` accept:
+
+- `YYYY-MM-DD` for all-day planning on a calendar date
+- `YYYY-MM-DDTHH:MM:SS` for a planned start time on that date
+
+TrainingPeaks stores planned workout times separately from the calendar day. Internally this means:
+
+- `workoutDay` stays at midnight for the selected date
+- `startTimePlanned` stores the planned start time
+- planned end time is derived from `startTimePlanned + totalTimePlanned`
+
+Example with a planned start time:
+
+```json
+{
+  "date": "2026-04-14T16:45:00",
+  "sport": "Strength",
+  "title": "Core & Mobility",
+  "duration_minutes": 60,
+  "description": "Core-Stabilisation und Dehnung."
+}
+```
 
 ## What is MCP?
 
