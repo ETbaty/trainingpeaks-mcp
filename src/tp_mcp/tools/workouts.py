@@ -43,6 +43,23 @@ def _extract_file_infos(raw_data: dict, key: str) -> list[dict]:
         })
     return normalized
 
+
+def _prepare_structure_payload(
+    structure: dict[str, Any] | str | None,
+) -> tuple[dict[str, Any] | None, float | None, float | None, float | None, str | None]:
+    """Parse simplified structure input and derive TP payload values."""
+    if structure is None:
+        return None, None, None, None, None
+
+    try:
+        parsed_structure = parse_structure_input(structure)
+        wire_structure = build_wire_structure(parsed_structure)
+        structure_if, structure_tss, total_seconds = compute_if_tss(parsed_structure)
+        return wire_structure, total_seconds / 60.0, structure_if, structure_tss, None
+    except (ValidationError, ValueError) as e:
+        msg = format_validation_error(e) if isinstance(e, ValidationError) else str(e)
+        return None, None, None, None, f"Invalid structure: {msg}"
+
 # Maps sport name to (workoutTypeFamilyId, workoutTypeValueId)
 # IDs confirmed from GET /fitness/v6/workouttypes
 SPORT_TYPE_MAP: dict[str, tuple[int, int]] = {
@@ -343,25 +360,15 @@ async def tp_create_workout(
 
     family_id, type_id = SPORT_TYPE_MAP[params.sport]
 
-    # If structure is provided, parse it and compute derived values
-    wire_structure = None
-    structure_duration_minutes = None
-    structure_if = None
-    structure_tss = None
-
-    if params.structure is not None:
-        try:
-            parsed_structure = parse_structure_input(params.structure)
-            wire_structure = build_wire_structure(parsed_structure)
-            structure_if, structure_tss, total_seconds = compute_if_tss(parsed_structure)
-            structure_duration_minutes = total_seconds / 60.0
-        except (ValidationError, ValueError) as e:
-            msg = format_validation_error(e) if isinstance(e, ValidationError) else str(e)
-            return {
-                "isError": True,
-                "error_code": "VALIDATION_ERROR",
-                "message": f"Invalid structure: {msg}",
-            }
+    wire_structure, structure_duration_minutes, structure_if, structure_tss, structure_error = (
+        _prepare_structure_payload(params.structure)
+    )
+    if structure_error is not None:
+        return {
+            "isError": True,
+            "error_code": "VALIDATION_ERROR",
+            "message": structure_error,
+        }
 
     # Use explicit duration if provided, otherwise use structure-computed
     effective_duration: float | None = float(params.duration_minutes) if params.duration_minutes is not None else None
@@ -496,6 +503,28 @@ async def tp_update_workout(
             "message": msg,
         }
 
+    wire_structure, structure_duration_minutes, structure_if, structure_tss, structure_error = (
+        _prepare_structure_payload(params.structure)
+    )
+    if structure_error is not None:
+        return {
+            "isError": True,
+            "error_code": "VALIDATION_ERROR",
+            "message": structure_error,
+        }
+
+    effective_duration = params.duration_minutes
+    if effective_duration is None and structure_duration_minutes is not None:
+        effective_duration = structure_duration_minutes
+
+    effective_tss = params.tss_planned
+    if effective_tss is None and structure_tss is not None:
+        effective_tss = structure_tss
+
+    effective_if = None
+    if params.structure is not None and params.tss_planned is None and structure_if is not None:
+        effective_if = structure_if
+
     async with TPClient() as client:
         athlete_id = await client.ensure_athlete_id()
         if not athlete_id:
@@ -544,12 +573,12 @@ async def tp_update_workout(
                 shifted_start = _shift_start_time_planned(existing["startTimePlanned"], params.date)
                 if shifted_start is not None:
                     existing["startTimePlanned"] = shifted_start
-        if params.duration_minutes is not None:
-            existing["totalTimePlanned"] = params.duration_minutes / 60.0
+        if effective_duration is not None:
+            existing["totalTimePlanned"] = effective_duration / 60.0
         if params.distance_km is not None:
             existing["distancePlanned"] = _km_to_m(params.distance_km)
-        if params.tss_planned is not None:
-            existing["tssPlanned"] = params.tss_planned
+        if effective_tss is not None:
+            existing["tssPlanned"] = effective_tss
         if params.tags is not None:
             existing["tags"] = params.tags
         if params.athlete_comment is not None:
@@ -561,11 +590,11 @@ async def tp_update_workout(
         if params.rpe is not None:
             existing["rpe"] = params.rpe
         if params.structure is not None:
-            # If structure is a dict (from GET response), serialise to JSON string
-            if isinstance(params.structure, dict):
-                existing["structure"] = json.dumps(params.structure)
+            existing["structure"] = json.dumps(wire_structure)
+            if effective_if is not None:
+                existing["ifPlanned"] = effective_if
             else:
-                existing["structure"] = params.structure
+                existing.pop("ifPlanned", None)
 
         # PUT updated workout
         put_endpoint = f"/fitness/v6/athletes/{athlete_id}/workouts/{params.workout_id}"

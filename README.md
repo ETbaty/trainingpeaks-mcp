@@ -31,7 +31,7 @@ Ask your AI assistant things like:
 | `tp_get_workouts` | List workouts in a date range (max 90 days) |
 | `tp_get_workout` | Get full details for a single workout |
 | `tp_create_workout` | Create a workout with optional interval structure, auto-computed IF/TSS, and optional planned start time |
-| `tp_update_workout` | Update any field of an existing workout, including planned start time |
+| `tp_update_workout` | Update any field of an existing workout, including structured intervals and planned start time |
 | `tp_delete_workout` | Delete a workout |
 | `tp_copy_workout` | Copy a workout to a new date (preserves structure and planned fields) |
 | `tp_reorder_workouts` | Reorder workouts on a given day |
@@ -217,6 +217,29 @@ Create workouts with full interval structure. The server auto-computes duration,
 
 The LLM builds this JSON naturally from conversation - just say "build me 4x8min sweet spot with 2min rest".
 
+You can use the same simplified `structure` object with `tp_update_workout`:
+
+```json
+{
+  "workout_id": "3658666303",
+  "duration_minutes": 57,
+  "tss_planned": 62.3,
+  "structure": {
+    "primaryIntensityMetric": "percentOfThresholdHr",
+    "steps": [
+      {"name": "Warm-up", "duration_seconds": 900, "intensity_min": 65, "intensity_max": 80, "intensityClass": "warmUp"},
+      {"type": "repetition", "name": "4x5min controlled tempo", "reps": 4, "steps": [
+        {"name": "Interval", "duration_seconds": 300, "intensity_min": 89, "intensity_max": 94, "intensityClass": "active"},
+        {"name": "Jog recovery", "duration_seconds": 180, "intensity_min": 65, "intensity_max": 83, "intensityClass": "rest"}
+      ]},
+      {"name": "Cool-down", "duration_seconds": 600, "intensity_min": 65, "intensity_max": 80, "intensityClass": "coolDown"}
+    ]
+  }
+}
+```
+
+If `duration_minutes` and `tss_planned` are omitted, they are derived from the structure. If you pass them explicitly, they override the derived values.
+
 For planned workout scheduling, `tp_create_workout` and `tp_update_workout` accept:
 
 - `YYYY-MM-DD` for all-day planning on a calendar date
@@ -236,7 +259,7 @@ Example with a planned start time:
   "sport": "Strength",
   "title": "Core & Mobility",
   "duration_minutes": 60,
-  "description": "Core-Stabilisation und Dehnung."
+  "description": "Core stabilisation and stretching."
 }
 ```
 

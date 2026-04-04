@@ -214,7 +214,11 @@ TOOLS = [
     ),
     Tool(
         name="tp_update_workout",
-        description="Update fields of an existing workout. Fetches existing, merges, then saves.",
+        description=(
+            "Update fields of an existing workout. Supports the same simplified "
+            "interval structure format as tp_create_workout, then fetches existing, "
+            "merges, and saves."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -232,7 +236,10 @@ TOOLS = [
                 "coach_comment": {"type": "string"},
                 "feeling": {"type": "integer", "description": "0-10"},
                 "rpe": {"type": "integer", "description": "1-10"},
-                "structure": {"type": ["object", "string"]},
+                "structure": {
+                    "type": ["object", "string"],
+                    "description": STRUCTURE_DESCRIPTION,
+                },
             },
             "required": ["workout_id"],
         },

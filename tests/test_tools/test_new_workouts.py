@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from tp_mcp.client.http import APIResponse, ErrorCode
+from tp_mcp.client.http import APIResponse
 from tp_mcp.tools.workouts import (
     tp_add_workout_comment,
     tp_copy_workout,
@@ -25,9 +25,27 @@ class TestCreateWorkoutWithStructure:
         structure = {
             "primaryIntensityMetric": "percentOfFtp",
             "steps": [
-                {"name": "WU", "duration_seconds": 600, "intensity_min": 40, "intensity_max": 55, "intensityClass": "warmUp"},
-                {"name": "Main", "duration_seconds": 1200, "intensity_min": 85, "intensity_max": 95, "intensityClass": "active"},
-                {"name": "CD", "duration_seconds": 600, "intensity_min": 40, "intensity_max": 55, "intensityClass": "coolDown"},
+                {
+                    "name": "WU",
+                    "duration_seconds": 600,
+                    "intensity_min": 40,
+                    "intensity_max": 55,
+                    "intensityClass": "warmUp",
+                },
+                {
+                    "name": "Main",
+                    "duration_seconds": 1200,
+                    "intensity_min": 85,
+                    "intensity_max": 95,
+                    "intensityClass": "active",
+                },
+                {
+                    "name": "CD",
+                    "duration_seconds": 600,
+                    "intensity_min": 40,
+                    "intensity_max": 55,
+                    "intensityClass": "coolDown",
+                },
             ],
         }
         create_response = APIResponse(
@@ -65,7 +83,13 @@ class TestCreateWorkoutWithStructure:
         """Explicit duration should override structure-computed duration."""
         structure = {
             "steps": [
-                {"name": "WU", "duration_seconds": 600, "intensity_min": 50, "intensity_max": 60, "intensityClass": "warmUp"},
+                {
+                    "name": "WU",
+                    "duration_seconds": 600,
+                    "intensity_min": 50,
+                    "intensity_max": 60,
+                    "intensityClass": "warmUp",
+                },
             ],
         }
         create_response = APIResponse(
@@ -292,10 +316,36 @@ class TestUpdateWorkout:
 
     @pytest.mark.asyncio
     async def test_update_with_structure_serialises(self):
-        """Structure dict should be JSON-serialised for PUT."""
+        """Simplified structure should be converted to TP wire format for PUT."""
         existing = {"workoutId": 1001}
         get_response = APIResponse(success=True, data=existing)
         put_response = APIResponse(success=True, data=None)
+        structure = {
+            "primaryIntensityMetric": "percentOfFtp",
+            "steps": [
+                {
+                    "name": "WU",
+                    "duration_seconds": 600,
+                    "intensity_min": 40,
+                    "intensity_max": 55,
+                    "intensityClass": "warmUp",
+                },
+                {
+                    "name": "Main",
+                    "duration_seconds": 1200,
+                    "intensity_min": 85,
+                    "intensity_max": 95,
+                    "intensityClass": "active",
+                },
+                {
+                    "name": "CD",
+                    "duration_seconds": 600,
+                    "intensity_min": 40,
+                    "intensity_max": 55,
+                    "intensityClass": "coolDown",
+                },
+            ],
+        }
 
         with patch("tp_mcp.tools.workouts.TPClient") as mock_client:
             mock_instance = AsyncMock()
@@ -306,12 +356,79 @@ class TestUpdateWorkout:
 
             result = await tp_update_workout(
                 workout_id="1001",
-                structure={"structure": [{"type": "step"}]},
+                structure=structure,
             )
 
         assert result["success"] is True
         put_payload = mock_instance.put.call_args[1]["json"]
         assert isinstance(put_payload["structure"], str)
+        parsed = json.loads(put_payload["structure"])
+        assert "structure" in parsed
+        assert "polyline" in parsed
+        assert abs(put_payload["totalTimePlanned"] - 40.0 / 60.0) < 0.01
+        assert put_payload["tssPlanned"] > 0
+        assert put_payload["ifPlanned"] > 0
+
+    @pytest.mark.asyncio
+    async def test_update_with_structure_explicit_duration_and_tss_override(self):
+        """Explicit duration and TSS should win over derived structure values."""
+        existing = {
+            "workoutId": 1001,
+            "ifPlanned": 0.91,
+        }
+        get_response = APIResponse(success=True, data=existing)
+        put_response = APIResponse(success=True, data=None)
+        structure = {
+            "steps": [
+                {
+                    "name": "WU",
+                    "duration_seconds": 600,
+                    "intensity_min": 50,
+                    "intensity_max": 60,
+                    "intensityClass": "warmUp",
+                },
+            ],
+        }
+
+        with patch("tp_mcp.tools.workouts.TPClient") as mock_client:
+            mock_instance = AsyncMock()
+            mock_instance.ensure_athlete_id = AsyncMock(return_value=123)
+            mock_instance.get = AsyncMock(return_value=get_response)
+            mock_instance.put = AsyncMock(return_value=put_response)
+            mock_client.return_value.__aenter__.return_value = mock_instance
+
+            result = await tp_update_workout(
+                workout_id="1001",
+                duration_minutes=90,
+                tss_planned=77,
+                structure=structure,
+            )
+
+        assert result["success"] is True
+        put_payload = mock_instance.put.call_args[1]["json"]
+        assert put_payload["totalTimePlanned"] == 90 / 60.0
+        assert put_payload["tssPlanned"] == 77
+        assert "ifPlanned" not in put_payload
+
+    @pytest.mark.asyncio
+    async def test_update_with_invalid_structure_returns_validation_error(self):
+        """Invalid simplified structure should fail before PUT."""
+        with patch("tp_mcp.tools.workouts.TPClient") as mock_client:
+            mock_instance = AsyncMock()
+            mock_instance.ensure_athlete_id = AsyncMock(return_value=123)
+            mock_instance.get = AsyncMock()
+            mock_instance.put = AsyncMock()
+            mock_client.return_value.__aenter__.return_value = mock_instance
+
+            result = await tp_update_workout(
+                workout_id="1001",
+                structure={"structure": [{"type": "step"}]},
+            )
+
+        assert result["isError"] is True
+        assert result["error_code"] == "VALIDATION_ERROR"
+        mock_instance.get.assert_not_called()
+        mock_instance.put.assert_not_called()
 
 
 class TestDeleteWorkout:
@@ -423,7 +540,7 @@ class TestCopyWorkout:
             mock_instance.post = AsyncMock(return_value=post_response)
             mock_client.return_value.__aenter__.return_value = mock_instance
 
-            result = await tp_copy_workout("1001", "2026-04-01", title="New Title")
+            await tp_copy_workout("1001", "2026-04-01", title="New Title")
 
         payload = mock_instance.post.call_args[1]["json"]
         assert payload["title"] == "New Title"
