@@ -340,6 +340,11 @@ async def tp_update_speed_zones(
 ) -> dict[str, Any]:
     """Update speed/pace zones.
 
+    TrainingPeaks returns speed zones as full zone-group objects with threshold,
+    calculation method, workout type, and explicit zone bounds. In practice,
+    the update endpoint appears to expect that same full structure rather than
+    a minimal payload.
+
     Args:
         run_threshold_pace: Run threshold pace (e.g. '4:30/km').
         swim_threshold_pace: Swim threshold pace (e.g. '1:45/100m').
@@ -376,12 +381,90 @@ async def tp_update_speed_zones(
                 "message": "Could not get athlete ID. Re-authenticate.",
             }
 
-        payload: dict[str, Any] = {}
+        payload: list[dict[str, Any]] | dict[str, float]
+        structured_payload: list[dict[str, Any]] | None = None
+        applied_updates: dict[str, float] = {}
+
+        settings_endpoint = f"/fitness/v1/athletes/{athlete_id}/settings"
+        settings_response = await client.get(settings_endpoint)
+        settings_data = getattr(settings_response, "data", None)
+        if isinstance(settings_data, dict):
+            speed_zones = settings_data.get("speedZones")
+            if isinstance(speed_zones, list) and speed_zones:
+                structured_payload = list(speed_zones)
+
+        def _update_zone_group(workout_type_ids: tuple[int, ...], new_threshold: float) -> bool:
+            if structured_payload is None:
+                return False
+
+            updated = False
+            for target_index, zone_group in enumerate(structured_payload):
+                if not isinstance(zone_group, dict):
+                    continue
+                if zone_group.get("workoutTypeId") not in workout_type_ids:
+                    continue
+
+                current_threshold = zone_group.get("threshold")
+                existing_zones = zone_group.get("zones")
+                if (
+                    not isinstance(current_threshold, (int, float))
+                    or current_threshold <= 0
+                    or not isinstance(existing_zones, list)
+                    or not existing_zones
+                ):
+                    continue
+
+                scale = new_threshold / float(current_threshold)
+                updated_zones: list[dict[str, Any]] = []
+                for idx, zone in enumerate(existing_zones):
+                    if not isinstance(zone, dict):
+                        updated_zones = []
+                        break
+
+                    minimum = zone.get("minimum")
+                    maximum = zone.get("maximum")
+                    if not isinstance(minimum, (int, float)) or not isinstance(maximum, (int, float)):
+                        updated_zones = []
+                        break
+
+                    updated_minimum = 0.0 if idx == 0 and minimum == 0 else float(minimum) * scale
+                    updated_maximum = (
+                        float(maximum)
+                        if idx == len(existing_zones) - 1 and float(maximum) > 100
+                        else float(maximum) * scale
+                    )
+
+                    updated_zones.append(
+                        {
+                            "label": zone.get("label"),
+                            "minimum": updated_minimum,
+                            "maximum": updated_maximum,
+                        }
+                    )
+
+                if not updated_zones:
+                    continue
+
+                updated_zone_group = {
+                    "threshold": new_threshold,
+                    "calculationMethod": zone_group.get("calculationMethod"),
+                    "distance": zone_group.get("distance"),
+                    "workoutTypeId": zone_group.get("workoutTypeId"),
+                    "zones": updated_zones,
+                }
+                if "zoneCalculatorId" in zone_group:
+                    updated_zone_group["zoneCalculatorId"] = zone_group.get("zoneCalculatorId")
+
+                structured_payload[target_index] = updated_zone_group
+                updated = True
+
+            return updated
+
+        minimal_payload: dict[str, float] = {}
 
         if params.run_threshold_pace is not None:
             try:
                 speed_ms = _parse_pace_to_ms(params.run_threshold_pace)
-                payload["runThreshold"] = speed_ms
             except ValueError as e:
                 return {
                     "isError": True,
@@ -389,16 +472,27 @@ async def tp_update_speed_zones(
                     "message": str(e),
                 }
 
+            if structured_payload is not None:
+                _update_zone_group((0, 3), speed_ms)
+            minimal_payload["runThreshold"] = speed_ms
+            applied_updates["runThreshold"] = speed_ms
+
         if params.swim_threshold_pace is not None:
             try:
                 speed_ms = _parse_pace_to_ms(params.swim_threshold_pace, is_swim=True)
-                payload["swimThreshold"] = speed_ms
             except ValueError as e:
                 return {
                     "isError": True,
                     "error_code": "VALIDATION_ERROR",
                     "message": str(e),
                 }
+
+            if structured_payload is not None:
+                _update_zone_group((1,), speed_ms)
+            minimal_payload["swimThreshold"] = speed_ms
+            applied_updates["swimThreshold"] = speed_ms
+
+        payload = structured_payload if structured_payload is not None else minimal_payload
 
         endpoint = f"/fitness/v2/athletes/{athlete_id}/speedzones"
         response = await client.put(endpoint, json=payload)
@@ -413,7 +507,8 @@ async def tp_update_speed_zones(
         return {
             "success": True,
             "message": "Speed zones updated.",
-            "updates": payload,
+            "updates": applied_updates,
+            "zone_groups_updated": len(payload),
         }
 
 

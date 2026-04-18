@@ -406,10 +406,11 @@ class TPClient:
             )
 
         # Generic error
+        response_text = response.text[:500] if response.text else ""
         return APIResponse(
             success=False,
             error_code=ErrorCode.API_ERROR,
-            message=f"API error: {response.status_code}",
+            message=f"API error: {response.status_code} - {response_text}",
         )
 
     async def get(self, endpoint: str, params: dict[str, Any] | None = None) -> APIResponse:
