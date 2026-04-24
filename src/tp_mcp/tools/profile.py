@@ -46,16 +46,37 @@ async def tp_get_profile() -> dict[str, Any]:
             is_premium = user_data.get("settings", {}).get("account", {}).get("isPremium", False)
             account_type = "premium" if is_premium else "basic"
 
+            # Detect coach vs athlete: a coach account has athletes with a
+            # different email (their coached athletes) in addition to their own
+            # entry. Any athlete whose email differs from the authenticated user
+            # and is coachedBy this personId means this is a coach account.
+            user_email = (user_data.get("email") or "").lower()
+            athletes = user_data.get("athletes", [])
+            has_coached_athletes = any(
+                (a.get("email") or "").lower() != user_email
+                and a.get("coachedBy") == person_id
+                for a in athletes
+            )
+            role = "coach" if has_coached_athletes else "athlete"
+
             first = user_data.get("firstName", "")
             last = user_data.get("lastName", "")
             name = user_data.get("fullName") or f"{first} {last}".strip()
 
-            return {
+            result: dict[str, Any] = {
                 "athlete_id": athlete_id,
                 "name": name,
                 "email": user_data.get("email"),
                 "account_type": account_type,
+                "role": role,
             }
+            if role == "coach":
+                result["athlete_count"] = sum(
+                    1 for a in athletes
+                    if (a.get("email") or "").lower() != user_email
+                    and a.get("coachedBy") == person_id
+                )
+            return result
         except Exception:
             logger.exception("Failed to parse profile")
             return {

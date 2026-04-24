@@ -85,11 +85,89 @@ def _parse_pace_to_ms(pace_str: str, is_swim: bool = False) -> float:
     return 1000.0 / total_seconds
 
 
+def _format_pace_min_km(speed_ms: float) -> str:
+    """Format m/s as 'M:SS/km'."""
+    if speed_ms <= 0:
+        return ""
+    sec_per_km = 1000.0 / speed_ms
+    minutes, seconds = divmod(int(round(sec_per_km)), 60)
+    return f"{minutes}:{seconds:02d}/km"
+
+
+def _format_pace_min_100m(speed_ms: float) -> str:
+    """Format m/s as 'M:SS/100m'."""
+    if speed_ms <= 0:
+        return ""
+    sec_per_100m = 100.0 / speed_ms
+    minutes, seconds = divmod(int(round(sec_per_100m)), 60)
+    return f"{minutes}:{seconds:02d}/100m"
+
+
+def _summarize_settings(data: dict[str, Any]) -> dict[str, Any]:
+    """Extract user-friendly threshold values from raw TP settings payload.
+
+    Maps common athlete-coaching terms (LTHR, LT pace, FTP) to the underlying
+    zone-group threshold fields and converts speed (m/s) into pace strings.
+    For multi-sport athletes, exposes per-sport HR and pace thresholds keyed
+    by sport name (e.g. lthr_bpm_bike, lt_pace_run).
+    """
+    # TP workoutTypeId values: 0 = general/default, 1 = swim, 2 = bike, 3 = run.
+    sport_by_id = {0: "general", 1: "swim", 2: "bike", 3: "run"}
+    summary: dict[str, Any] = {}
+
+    hr_zones = data.get("heartRateZones")
+    if isinstance(hr_zones, list):
+        for group in hr_zones:
+            if not isinstance(group, dict):
+                continue
+            t = group.get("threshold")
+            if not isinstance(t, (int, float)) or t <= 0:
+                continue
+            sport = sport_by_id.get(group.get("workoutTypeId"), "other")
+            key = "lthr_bpm" if sport in ("general", "other") else f"lthr_bpm_{sport}"
+            summary.setdefault(key, int(t))
+
+    speed_zones = data.get("speedZones")
+    if isinstance(speed_zones, list):
+        for group in speed_zones:
+            if not isinstance(group, dict):
+                continue
+            t = group.get("threshold")
+            if not isinstance(t, (int, float)) or t <= 0:
+                continue
+            sport = sport_by_id.get(group.get("workoutTypeId"), "other")
+            entry: dict[str, Any] = {"threshold_m_per_s": round(float(t), 3)}
+            if sport == "swim":
+                entry["pace_min_per_100m"] = _format_pace_min_100m(float(t))
+            else:
+                entry["pace_min_per_km"] = _format_pace_min_km(float(t))
+            key = f"lt_pace_{sport}" if sport != "other" else "lt_pace_other"
+            summary.setdefault(key, entry)
+
+    power_zones = data.get("powerZones")
+    if isinstance(power_zones, list):
+        for group in power_zones:
+            if not isinstance(group, dict):
+                continue
+            t = group.get("threshold")
+            if not isinstance(t, (int, float)) or t <= 0:
+                continue
+            sport = sport_by_id.get(group.get("workoutTypeId"), "other")
+            # FTP is sport-specific: cyclists have bike FTP, runners with power
+            # meters (e.g. Stryd) have run FTP, swimmers rarely use power.
+            key = "ftp_watts" if sport in ("general", "other") else f"ftp_watts_{sport}"
+            summary.setdefault(key, int(t))
+
+    return summary
+
+
 async def tp_get_athlete_settings() -> dict[str, Any]:
     """Get athlete settings including FTP, thresholds, zones, and profile.
 
     Returns:
-        Dict with all athlete settings.
+        Dict with the full TrainingPeaks settings payload plus a 'summary'
+        block exposing common coaching terms (LTHR, LT pace, FTP) in friendly
+        units.
     """
     async with TPClient() as client:
         athlete_id = await client.ensure_athlete_id()
@@ -117,7 +195,7 @@ async def tp_get_athlete_settings() -> dict[str, Any]:
                 "message": "No settings data returned.",
             }
 
-        return {"settings": response.data}
+        return {"settings": response.data, "summary": _summarize_settings(response.data)}
 
 
 async def tp_update_ftp(ftp: int) -> dict[str, Any]:
