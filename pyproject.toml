@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tp-mcp-coach"
-version = "2.0.1"
+version = "2.0.2"
 description = "TrainingPeaks MCP Server (coach-oriented fork) - AI assistant integration for TrainingPeaks with extra coach tools and bug fixes"
 readme = "README.md"
 requires-python = ">=3.10"

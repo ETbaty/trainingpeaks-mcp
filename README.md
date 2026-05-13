@@ -174,7 +174,7 @@ Add this inside `mcpServers` (replace `<WHEEL_URL>` with the URL of the release 
       "command": "uvx",
       "args": [
         "--from",
-        "tp-mcp-coach @ https://github.com/ETbaty/trainingpeaks-mcp/releases/download/v2.0.1/tp_mcp_coach-2.0.1-py3-none-any.whl",
+        "tp-mcp-coach @ https://github.com/ETbaty/trainingpeaks-mcp/releases/download/v2.0.2/tp_mcp_coach-2.0.2-py3-none-any.whl",
         "tp-mcp-coach",
         "serve"
       ]
@@ -194,7 +194,7 @@ Restart Claude Desktop. You're ready to go!
 If you prefer [`pipx`](https://pipx.pypa.io/):
 
 ```bash
-pipx install "tp-mcp-coach[browser] @ https://github.com/ETbaty/trainingpeaks-mcp/releases/download/v2.0.1/tp_mcp_coach-2.0.1-py3-none-any.whl"
+pipx install "tp-mcp-coach[browser] @ https://github.com/ETbaty/trainingpeaks-mcp/releases/download/v2.0.2/tp_mcp_coach-2.0.2-py3-none-any.whl"
 tp-mcp-coach auth --from-browser auto
 ```
 
