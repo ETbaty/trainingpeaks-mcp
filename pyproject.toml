@@ -35,9 +35,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/JamsusMaximus/trainingpeaks-mcp"
-Repository = "https://github.com/JamsusMaximus/trainingpeaks-mcp"
-Issues = "https://github.com/JamsusMaximus/trainingpeaks-mcp/issues"
+Homepage = "https://github.com/ETbaty/trainingpeaks-mcp"
+Repository = "https://github.com/ETbaty/trainingpeaks-mcp"
+Issues = "https://github.com/ETbaty/trainingpeaks-mcp/issues"
+Upstream = "https://github.com/JamsusMaximus/trainingpeaks-mcp"
 
 [project.optional-dependencies]
 browser = [

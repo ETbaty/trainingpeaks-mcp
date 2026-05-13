@@ -1,8 +1,4 @@
-# TrainingPeaks MCP Server
-
-<a href="https://glama.ai/mcp/servers/@JamsusMaximus/TrainingPeaks-MCP">
-  <img width="380" height="200" src="https://glama.ai/mcp/servers/@JamsusMaximus/TrainingPeaks-MCP/badge" alt="TrainingPeaks MCP server" />
-</a>
+# TrainingPeaks MCP Server (coach fork)
 
 Connect TrainingPeaks to Claude and other AI assistants via the Model Context Protocol (MCP). Query workouts, build structured intervals, manage your calendar, track fitness trends, and control your training through natural conversation.
 
