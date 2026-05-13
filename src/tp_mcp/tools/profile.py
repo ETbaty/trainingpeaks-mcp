@@ -54,7 +54,7 @@ async def tp_get_profile() -> dict[str, Any]:
             athletes = user_data.get("athletes", [])
             has_coached_athletes = any(
                 (a.get("email") or "").lower() != user_email
-                and a.get("coachedBy") == person_id
+                and a.get("coachedBy") == athlete_id
                 for a in athletes
             )
             role = "coach" if has_coached_athletes else "athlete"
@@ -74,7 +74,7 @@ async def tp_get_profile() -> dict[str, Any]:
                 result["athlete_count"] = sum(
                     1 for a in athletes
                     if (a.get("email") or "").lower() != user_email
-                    and a.get("coachedBy") == person_id
+                    and a.get("coachedBy") == athlete_id
                 )
             return result
         except Exception:
