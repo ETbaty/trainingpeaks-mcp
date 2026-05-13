@@ -3,14 +3,15 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "tp-mcp"
-version = "2.0.0"
-description = "TrainingPeaks MCP Server - AI assistant integration for TrainingPeaks"
+name = "tp-mcp-coach"
+version = "2.0.1"
+description = "TrainingPeaks MCP Server (coach-oriented fork) - AI assistant integration for TrainingPeaks with extra coach tools and bug fixes"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 authors = [
-    { name = "James" }
+    { name = "James" },
+    { name = "Elad" }
 ]
 keywords = ["trainingpeaks", "mcp", "ai", "training", "cycling", "running"]
 classifiers = [
@@ -50,6 +51,7 @@ dev = [
 ]
 
 [project.scripts]
+tp-mcp-coach = "tp_mcp.cli:main"
 tp-mcp = "tp_mcp.cli:main"
 
 [tool.hatch.build.targets.wheel]

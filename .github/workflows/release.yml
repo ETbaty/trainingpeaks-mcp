@@ -1,0 +1,95 @@
+name: Release
+
+# On every tag push (vX.Y.Z) this workflow:
+#   1. Builds the sdist + wheel for tp-mcp-coach
+#   2. Verifies the tag matches pyproject.toml version
+#   3. Creates (or updates) a GitHub Release for the tag
+#   4. Uploads dist/* as release assets
+#
+# No PyPI account, no 2FA, no API tokens required.
+#
+# To release:
+#   # bump version in pyproject.toml first
+#   git commit -am "Release vX.Y.Z"
+#   git tag vX.Y.Z
+#   git push origin main vX.Y.Z
+#
+# To re-run for an existing tag (e.g. you forgot to push the tag, or the build
+# failed): use the "Run workflow" button on the Actions tab and pass the tag.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)build and upload assets for, e.g. v2.0.1"
+        required: true
+
+permissions:
+  contents: write  # needed to create the release and upload assets
+
+jobs:
+  release:
+    name: Build and attach to GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (tag from push)
+        if: github.event_name == 'push'
+        uses: actions/checkout@v4
+
+      - name: Checkout (manual dispatch tag)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Resolve tag name
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "name=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tooling
+        run: python -m pip install --upgrade build
+
+      - name: Build sdist + wheel
+        run: python -m build
+
+      - name: Verify version matches tag
+        run: |
+          TAG="${{ steps.tag.outputs.name }}"
+          TAG_VERSION="${TAG#v}"
+          PKG_VERSION=$(python -c "import tomllib,pathlib;print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          echo "Tag version:     $TAG_VERSION"
+          echo "Package version: $PKG_VERSION"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag $TAG_VERSION does not match pyproject version $PKG_VERSION"
+            exit 1
+          fi
+
+      - name: Upload distributions as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Create or update GitHub Release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: ${{ steps.tag.outputs.name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/*.whl
+            dist/*.tar.gz

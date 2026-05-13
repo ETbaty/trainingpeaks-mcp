@@ -119,80 +119,143 @@ Ask your AI assistant things like:
 
 ## Setup Options
 
-### Option A: Auto-Setup with Claude Code
+> This is the **coach-oriented fork** of [JamsusMaximus/trainingpeaks-mcp](https://github.com/JamsusMaximus/trainingpeaks-mcp), maintained at [ETbaty/trainingpeaks-mcp](https://github.com/ETbaty/trainingpeaks-mcp). Wheels are published as **GitHub Release assets** on the fork (no PyPI). It includes additional coach tools and bug fixes on top of the upstream `tp-mcp` package.
 
-If you have [Claude Code](https://claude.ai/code), paste this prompt:
+### Option A: Recommended (no Python knowledge required) — `uvx`
 
-```
-Set up the TrainingPeaks MCP server from https://github.com/JamsusMaximus/trainingpeaks-mcp - clone it, create a venv, install it, then walk me through getting my TrainingPeaks cookie from my browser and run tp-mcp auth. Finally, add it to my Claude Desktop config.
-```
+[`uv`](https://docs.astral.sh/uv/getting-started/installation/) is a fast Python package runner. Install it once, then `uvx` will fetch the wheel directly from a GitHub Release and run it in an isolated environment — no `git clone`, no `venv`, no `pip install` to manage.
 
-Claude will handle the installation and guide you through authentication step-by-step.
+#### Step 1: Install `uv`
 
-### Option B: Manual Setup
+- **macOS / Linux**
+  ```bash
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  ```
+- **Windows (PowerShell)**
+  ```powershell
+  powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+  ```
 
-#### Step 1: Install
-
-```bash
-git clone https://github.com/JamsusMaximus/trainingpeaks-mcp.git
-cd trainingpeaks-mcp
-python3 -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -e .
-```
+Restart your terminal so `uv` and `uvx` are on your `PATH`.
 
 #### Step 2: Authenticate
 
-**Option A: Auto-extract from browser (easiest)**
+Grab the latest wheel URL once: open https://github.com/ETbaty/trainingpeaks-mcp/releases/latest and copy the link to the `tp_mcp_coach-…-py3-none-any.whl` asset.
 
-If you're logged into TrainingPeaks in your browser:
+Then auth — auto-extract from your browser is easiest:
 
 ```bash
-pip install tp-mcp[browser]  # One-time: install browser support
-tp-mcp auth --from-browser chrome  # Or: firefox, safari, edge, auto
+# Option A: pull the cookie automatically from your browser
+uvx --from "tp-mcp-coach[browser] @ <PASTE_WHEEL_URL_HERE>" tp-mcp-coach auth --from-browser auto
+
+# Option B: paste the cookie manually
+uvx --from "tp-mcp-coach @ <PASTE_WHEEL_URL_HERE>" tp-mcp-coach auth
 ```
 
-> **macOS note:** You may see security prompts for Keychain or Full Disk Access. This is normal - browser cookies are encrypted and require permission to read.
+For manual entry: log into [app.trainingpeaks.com](https://app.trainingpeaks.com), open DevTools (`F12`) → **Application** → **Cookies**, copy the `Production_tpAuth` value, and paste when prompted.
 
-**Option B: Manual cookie entry**
+> **macOS note:** browser auto-extract may trigger Keychain or Full Disk Access prompts. This is normal — browser cookies are encrypted and require OS permission to read.
 
-1. Log into [app.trainingpeaks.com](https://app.trainingpeaks.com)
-2. Open DevTools (`F12`) -> **Application** tab -> **Cookies**
-3. Find `Production_tpAuth` and copy its value
-4. Run `tp-mcp auth` and paste when prompted
-
-**Other auth commands:**
+Other auth commands (use the same `--from "tp-mcp-coach @ <WHEEL_URL>"` prefix):
 ```bash
-tp-mcp auth-status  # Check if authenticated
-tp-mcp auth-clear   # Remove stored cookie
+uvx --from "tp-mcp-coach @ <WHEEL_URL>" tp-mcp-coach auth-status
+uvx --from "tp-mcp-coach @ <WHEEL_URL>" tp-mcp-coach auth-clear
 ```
 
 #### Step 3: Add to Claude Desktop
 
-Run this to get your config snippet:
+Edit your Claude Desktop config:
 
-```bash
-tp-mcp config
-```
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows) and paste it inside `mcpServers`. Example with multiple servers:
+Add this inside `mcpServers` (replace `<WHEEL_URL>` with the URL of the release asset you want to pin to):
 
 ```json
 {
   "mcpServers": {
-    "some-other-server": {
-      "command": "npx",
-      "args": ["some-other-mcp"]
-    },
     "trainingpeaks": {
-      "command": "/Users/you/trainingpeaks-mcp/.venv/bin/tp-mcp",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "tp-mcp-coach @ https://github.com/ETbaty/trainingpeaks-mcp/releases/download/v2.0.1/tp_mcp_coach-2.0.1-py3-none-any.whl",
+        "tp-mcp-coach",
+        "serve"
+      ]
+    }
+  }
+}
+```
+
+If Claude Desktop can't find `uvx`, use the absolute path printed by `which uvx` (macOS/Linux) or `where.exe uvx` (Windows) instead of just `"uvx"`.
+
+To upgrade later, bump the version in the URL above and restart Claude Desktop. (`uvx` caches by URL, so a new URL = a fresh install.)
+
+Restart Claude Desktop. You're ready to go!
+
+### Option B: Install with `pipx` (pinned to a release wheel)
+
+If you prefer [`pipx`](https://pipx.pypa.io/):
+
+```bash
+pipx install "tp-mcp-coach[browser] @ https://github.com/ETbaty/trainingpeaks-mcp/releases/download/v2.0.1/tp_mcp_coach-2.0.1-py3-none-any.whl"
+tp-mcp-coach auth --from-browser auto
+```
+
+Then in Claude Desktop config, point `command` at the absolute path to the installed binary (find it with `which tp-mcp-coach` / `where.exe tp-mcp-coach`):
+
+```json
+{
+  "mcpServers": {
+    "trainingpeaks": {
+      "command": "/full/path/to/tp-mcp-coach",
       "args": ["serve"]
     }
   }
 }
 ```
 
-Restart Claude Desktop. You're ready to go!
+### Option C: Developer setup (from source)
+
+```bash
+git clone https://github.com/ETbaty/trainingpeaks-mcp.git
+cd trainingpeaks-mcp
+python3 -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -e ".[browser,dev]"
+tp-mcp-coach auth --from-browser auto
+tp-mcp-coach config   # prints a Claude Desktop snippet pointing at this venv
+```
+
+---
+
+## Releasing (maintainers)
+
+Two options — both produce the same artifacts attached to a GitHub Release. **No PyPI account or 2FA needed.**
+
+### Automatic (GitHub Actions, recommended)
+
+1. Bump `version` in [pyproject.toml](pyproject.toml).
+2. Commit, then tag and push:
+   ```bash
+   git commit -am "Release v2.0.2"
+   git tag v2.0.2
+   git push origin main v2.0.2
+   ```
+3. The [`Release`](.github/workflows/release.yml) workflow runs automatically: it builds the sdist + wheel, verifies the tag matches the package version, creates the GitHub Release, and uploads `dist/*` as assets.
+
+To re-run for an existing tag (e.g. you changed the workflow), use **Actions → Release → Run workflow** and supply the tag.
+
+### Manual (local build, if you don't want to wait for CI)
+
+Requires the [GitHub CLI](https://cli.github.com/) (`gh auth login` once) and [`uv`](https://docs.astral.sh/uv/) (or fall back to `python -m build`).
+
+```powershell
+# from repo root
+pwsh ./scripts/release-local.ps1
+```
+
+The script reads the version from `pyproject.toml`, runs `uv build`, ensures the matching `vX.Y.Z` tag and GitHub Release exist, then uploads `dist/*.whl` and `dist/*.tar.gz` as assets (overwriting any existing assets with the same name via `--clobber`).
 
 ---
 
